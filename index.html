@@ -3,18 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ドット絵メーカー</title>
+<title>ドット風加工ジェネレーター</title>
 <meta name="description" content="写真やイラストを、ファミコン風・ゲームボーイ風などのドット絵に変換するブラウザアプリ。画像は端末の外へ送信されません。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
-/* ドット絵メーカー */
-html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; }
-[hidden] { display: none !important; }
-
-/* Layout: プレビューを大きく左(スマホは上)、操作パネルを右(スマホは下)。出力画像が主役で、UIは静かに。 */
+/* ドット風加工ジェネレーター
+   レイアウト: 上にタイトル、中央にプレビュー、下に4タブの操作シート。PCでは右側にシート。 */
 :root {
   --bg: #eeeef6;
   --panel: #fafaff;
@@ -24,181 +20,207 @@ body { margin: 0; }
   --accent: #5a49e8;
   --accent-fg: #ffffff;
   --frame: #1a1830;
+  --tab-on: #1c1b2e;
+  --tab-on-fg: #fafaff;
   --font-display: "DotGothic16", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
-  color-scheme: light;
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #121120; --panel: #1b1a2e; --fg: #ecebf8; --muted: #9b99b8;
     --line: #333152; --accent: #a398ff; --accent-fg: #14122a; --frame: #0b0a16;
+    --tab-on: #ecebf8; --tab-on-fg: #14122a;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121120; --panel: #1b1a2e; --fg: #ecebf8; --muted: #9b99b8;
   --line: #333152; --accent: #a398ff; --accent-fg: #14122a; --frame: #0b0a16;
+  --tab-on: #ecebf8; --tab-on-fg: #14122a;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
 body {
-  background: var(--bg); color: var(--fg);
+  margin: 0; background: var(--bg); color: var(--fg);
   font-family: var(--font-body); font-size: 15px; line-height: 1.6;
-  padding-inline: 16px; padding-block: 0 40px;
 }
-.wrap { max-width: 1040px; margin-inline: auto; display: grid; gap: 4px; }
-header { display: flex; flex-direction: column; gap: 2px; }
+.app {
+  height: 100%; max-width: 1100px; margin-inline: auto;
+  display: flex; flex-direction: column; gap: 8px; padding-top: 8px;
+}
+.top { flex: none; padding-inline: 16px; }
 h1 { font-family: var(--font-display); font-weight: 400; font-size: 17px; letter-spacing: .06em; margin: 0; line-height: 1.3; }
-header p { display: none; }
-.layout { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
-@media (min-width: 840px) {
-  .layout { grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); }
-}
-.stage {
-  display: grid; gap: 8px; min-width: 0;
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
-  background: var(--bg); padding-block: 8px;
-}
+
+.stage { flex: 1; min-height: 0; display: flex; padding-inline: 16px; }
 .frame {
+  flex: 1; min-width: 0; position: relative;
   background: var(--frame); border: 1px solid var(--line); border-radius: 6px;
-  padding: 8px; display: grid; place-items: center; position: relative;
 }
 .frame.drag { outline: 2px dashed var(--accent); outline-offset: -6px; }
-#view { display: block; width: auto; max-width: 100%; max-height: 36vh; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; background: conic-gradient(#3a3852 25%, #2c2a42 0 50%, #3a3852 0 75%, #2c2a42 0) 0 0 / 16px 16px; }
+#view {
+  position: absolute; inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px);
+  object-fit: contain; image-rendering: pixelated; image-rendering: crisp-edges;
+  background: conic-gradient(#3a3852 25%, #2c2a42 0 50%, #3a3852 0 75%, #2c2a42 0) 0 0 / 16px 16px;
+}
 #view.smooth { image-rendering: auto; }
-.statusbar { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; }
-.statusbar b { font-family: var(--font-display); font-weight: 400; color: var(--fg); letter-spacing: .03em; }
-.head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.head .segs { width: 168px; flex: none; }
-.head .seg { min-height: 36px; padding: 4px 6px; }
-.chip { position: absolute; left: 12px; bottom: 12px; background: rgba(0,0,0,.62); color: #fff; font-family: var(--font-display); font-size: 12px; letter-spacing: .03em; padding: 1px 8px; border-radius: 3px; pointer-events: none; font-variant-numeric: tabular-nums; }
-.bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
-.bar .statusbar { display: grid; gap: 0; justify-content: start; min-width: 0; line-height: 1.4; }
-.bar .segs { width: 168px; flex: none; }
-.bar .seg { min-height: 36px; padding: 4px 6px; }
-.tune { display: grid; gap: 2px; }
-.tune .field { gap: 0; }
-.tune input[type="range"] { min-height: 26px; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: grid; gap: 20px; min-width: 0; }
+.chip {
+  position: absolute; left: 12px; bottom: 12px; background: rgba(0,0,0,.62); color: #fff;
+  font-family: var(--font-display); font-size: 12px; letter-spacing: .03em; padding: 1px 8px;
+  border-radius: 3px; pointer-events: none; font-variant-numeric: tabular-nums;
+}
+
+.sheet {
+  flex: none; height: min(44%, 360px); min-height: 250px;
+  background: var(--panel); border: 1px solid var(--line); border-bottom: 0;
+  border-radius: 18px 18px 0 0; display: flex; flex-direction: column; min-width: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tabs { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.tab {
+  appearance: none; font: inherit; font-size: 14px; color: var(--muted); background: transparent;
+  border: 0; border-radius: 10px; min-height: 44px; cursor: pointer; padding: 0 4px;
+}
+.tab[aria-selected="true"] { background: var(--tab-on); color: var(--tab-on-fg); font-weight: 700; }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panes { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 18px; }
+.pane { display: grid; gap: 16px; align-content: start; }
+
+.field { display: grid; gap: 4px; min-width: 0; }
+.field .top2 { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.field .top2 output { font-variant-numeric: tabular-nums; color: var(--muted); }
+input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 30px; margin: 0; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 8px; }
 legend, .lbl { font-family: var(--font-display); font-size: 14px; letter-spacing: .06em; padding: 0; margin-bottom: 8px; color: var(--fg); }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+#toast { min-height: 20px; font-size: 13px; color: var(--muted); }
+
 .btn {
   appearance: none; font: inherit; font-weight: 700; cursor: pointer;
-  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 4px;
+  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 6px;
   padding: 10px 16px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
 .btn:hover { filter: brightness(1.06); }
 .btn:focus-visible, input:focus-visible + .card, input:focus-visible + .seg { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
 .pals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.pal input, .segs input { position: absolute; opacity: 0; pointer-events: none; }
 .pal { position: relative; display: block; }
-.card {
-  display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 4px; padding: 8px;
-  cursor: pointer; background: var(--bg); height: 100%;
-}
-.card .name { font-weight: 700; font-size: 13px; line-height: 1.3; }
-.card .sub { font-size: 12px; color: var(--muted); }
-.strip { display: flex; height: 16px; border-radius: 2px; overflow: hidden; }
+.pal input, .segs input { position: absolute; opacity: 0; pointer-events: none; }
+.card { display: grid; gap: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; cursor: pointer; background: var(--bg); height: 100%; }
+.card .name { font-weight: 700; font-size: 13px; line-height: 1.3; display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; }
+.card .name small { font-weight: 400; font-size: 11px; color: var(--muted); }
+.strip { display: flex; height: 14px; border-radius: 2px; overflow: hidden; }
 .strip i { flex: 1; display: block; }
 .pal input:checked + .card { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.segs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; position: relative; }
+
+.segs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; position: relative; }
+.segs label { position: relative; display: block; }
 .seg {
-  display: grid; place-items: center; text-align: center; padding: 8px 6px; min-height: 40px; cursor: pointer;
+  display: grid; place-items: center; text-align: center; padding: 8px 6px; min-height: 42px; cursor: pointer;
   border: 1px solid var(--line); background: var(--bg); font-size: 14px;
 }
-.segs label:first-child .seg { border-radius: 4px 0 0 4px; }
-.segs label:last-child .seg { border-radius: 0 4px 4px 0; }
+.segs label:first-child .seg { border-radius: 6px 0 0 6px; }
+.segs label:last-child .seg { border-radius: 0 6px 6px 0; }
 .segs label:not(:first-child) .seg { border-left-width: 0; }
-.segs label { position: relative; display: block; }
 .segs input:checked + .seg { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 700; }
-.field { display: grid; gap: 4px; }
-.field .top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
-.field .top output { font-variant-numeric: tabular-nums; color: var(--muted); }
-input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 28px; margin: 0; }
-.hint { color: var(--muted); font-size: 13px; margin: 0; }
-#toast { min-height: 20px; font-size: 13px; color: var(--muted); }
+
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
 @media (min-width: 840px) {
-  .stage { top: 20px; }
-  #view { max-height: 56vh; }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto minmax(0, 1fr); gap: 8px 16px; padding: 12px 16px 16px; }
+  .top { grid-column: 1 / -1; padding-inline: 0; }
+  .stage { padding-inline: 0; }
+  .sheet { height: auto; min-height: 0; border-bottom: 1px solid var(--line); border-radius: 14px; }
 }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="app">
+  <header class="top"><h1>ドット風加工ジェネレーター</h1></header>
 
-  <div class="layout">
-    <section class="stage" aria-label="プレビュー">
-      <div class="head">
-        <h1>ドット絵メーカー</h1>
-        <div class="segs" role="radiogroup" aria-label="表示切り替え">
-          <label><input type="radio" name="show" value="dot" checked><span class="seg">ドット絵</span></label>
-          <label><input type="radio" name="show" value="orig"><span class="seg">元画像</span></label>
-        </div>
-      </div>
-      <div class="frame" id="frame">
-        <canvas id="view" width="960" height="430" aria-label="変換結果のプレビュー"></canvas>
-        <div class="chip"><span id="info">-</span></div>
-      </div>
-      <div class="tune">
+  <section class="stage" aria-label="プレビュー">
+    <div class="frame" id="frame">
+      <canvas id="view" width="960" height="430" aria-label="変換結果のプレビュー"></canvas>
+      <div class="chip"><span id="info">-</span></div>
+    </div>
+  </section>
+
+  <section class="sheet" aria-label="設定">
+    <div class="tabs" role="tablist" aria-label="設定の種類">
+      <button class="tab" role="tab" id="tab-adjust" type="button" aria-controls="pane-adjust" aria-selected="true">調整</button>
+      <button class="tab" role="tab" id="tab-color" type="button" aria-controls="pane-color" aria-selected="false" tabindex="-1">色</button>
+      <button class="tab" role="tab" id="tab-shape" type="button" aria-controls="pane-shape" aria-selected="false" tabindex="-1">形</button>
+      <button class="tab" role="tab" id="tab-file" type="button" aria-controls="pane-file" aria-selected="false" tabindex="-1">画像</button>
+    </div>
+
+    <div class="panes">
+      <div class="pane" role="tabpanel" id="pane-adjust" aria-labelledby="tab-adjust">
         <div class="field">
-          <div class="top"><label for="grid">ドットの粗さ</label><output id="gridOut">横 96 ドット</output></div>
+          <div class="top2"><label for="grid">ドットの粗さ（大きさ）</label><output id="gridOut">横 96 ドット</output></div>
           <input type="range" id="grid" min="24" max="220" step="2" value="96">
         </div>
         <div class="field">
-          <div class="top"><label for="bright">明るさ</label><output id="brightOut">0</output></div>
+          <div class="top2"><label for="bright">明るさ</label><output id="brightOut">0</output></div>
           <input type="range" id="bright" min="-50" max="50" step="1" value="0">
         </div>
         <div class="field">
-          <div class="top"><label for="contrast">コントラスト</label><output id="contrastOut">0</output></div>
+          <div class="top2"><label for="contrast">コントラスト（明暗の差）</label><output id="contrastOut">0</output></div>
           <input type="range" id="contrast" min="-50" max="50" step="1" value="0">
         </div>
       </div>
-    </section>
 
-    <section class="panel" aria-label="設定">
-      <div class="field">
-        <span class="lbl">画像</span>
-        <div class="row">
-          <label class="btn" for="file">画像を選ぶ</label>
-          <input class="visually-hidden" type="file" id="file" accept="image/*">
-          <button class="btn ghost" type="button" id="sample">サンプルに戻す</button>
-        </div>
-        <p class="hint">読み込み中：<span id="srcname">サンプル画像</span></p>
-        <p class="hint">プレビューへドラッグ＆ドロップでも読み込めます。画像は端末の外へ送信されません。</p>
+      <div class="pane" role="tabpanel" id="pane-color" aria-labelledby="tab-color" hidden>
+        <div class="pals" id="pals" role="radiogroup" aria-label="パレット"></div>
       </div>
 
-      <fieldset>
-        <legend>パレット</legend>
-        <div class="pals" id="pals"></div>
-      </fieldset>
-
-      <fieldset>
-        <legend>ドットの形</legend>
-        <div class="segs" role="radiogroup" aria-label="ドットの形">
-          <label><input type="radio" name="shape" value="square" checked><span class="seg">四角</span></label>
-          <label><input type="radio" name="shape" value="circle"><span class="seg">丸</span></label>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>ディザ（網点）</legend>
-        <div class="segs" role="radiogroup" aria-label="ディザ">
-          <label><input type="radio" name="dither" value="off"><span class="seg">なし</span></label>
-          <label><input type="radio" name="dither" value="bayer" checked><span class="seg">あり</span></label>
-        </div>
-      </fieldset>
-
-      <div class="field">
-        <button class="btn" type="button" id="save">PNGで保存</button>
-        <p class="hint" id="saveHint">保存すると、拡大したPNG画像がダウンロードされます。</p>
-        <div id="toast" role="status" aria-live="polite"></div>
+      <div class="pane" role="tabpanel" id="pane-shape" aria-labelledby="tab-shape" hidden>
+        <fieldset>
+          <legend>ドットの形</legend>
+          <div class="segs" role="radiogroup" aria-label="ドットの形">
+            <label><input type="radio" name="shape" value="square" checked><span class="seg">四角</span></label>
+            <label><input type="radio" name="shape" value="circle"><span class="seg">丸</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>ディザ（網点）</legend>
+          <div class="segs" role="radiogroup" aria-label="ディザ">
+            <label><input type="radio" name="dither" value="off"><span class="seg">なし</span></label>
+            <label><input type="radio" name="dither" value="bayer" checked><span class="seg">あり</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>元画像と比べる</legend>
+          <div class="segs" role="radiogroup" aria-label="表示切り替え">
+            <label><input type="radio" name="show" value="dot" checked><span class="seg">ドット絵</span></label>
+            <label><input type="radio" name="show" value="orig"><span class="seg">元画像</span></label>
+          </div>
+        </fieldset>
       </div>
-    </section>
-  </div>
+
+      <div class="pane" role="tabpanel" id="pane-file" aria-labelledby="tab-file" hidden>
+        <div class="field">
+          <span class="lbl">画像を読み込む</span>
+          <div class="row">
+            <label class="btn" for="file">画像を選ぶ</label>
+            <input class="visually-hidden" type="file" id="file" accept="image/*">
+            <button class="btn ghost" type="button" id="sample">サンプルに戻す</button>
+          </div>
+          <p class="hint">読み込み中：<span id="srcname">サンプル画像</span></p>
+          <p class="hint">プレビューへドラッグ＆ドロップでも読み込めます。画像は端末の外へ送信されません。</p>
+        </div>
+        <div class="field">
+          <span class="lbl">保存</span>
+          <button class="btn" type="button" id="save">PNGで保存</button>
+          <p class="hint" id="saveHint">拡大したPNG画像が保存されます。</p>
+          <div id="toast" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -254,7 +276,7 @@ window.SAMPLE_DATA_URL = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wB
     lab.className = "pal";
     lab.innerHTML = '<input type="radio" name="pal" value="' + p.id + '"' + (i === 0 ? " checked" : "") + '>' +
       '<span class="card"><span class="strip">' + sw + '</span><span class="name">' + p.name +
-      '</span><span class="sub">' + p.colors.length + '色</span></span>';
+      '<small>' + p.colors.length + '色</small></span></span>';
     palsEl.appendChild(lab);
   });
 
@@ -457,6 +479,27 @@ window.SAMPLE_DATA_URL = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wB
       setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
       toast.textContent = "保存しました。";
     }, "image/png");
+  });
+
+  /* タブ切り替え */
+  var tabEls = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function selectTab(tab) {
+    tabEls.forEach(function (t) {
+      var on = t === tab;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    });
+  }
+  tabEls.forEach(function (t, i) {
+    t.addEventListener("click", function () { selectTab(t); });
+    t.addEventListener("keydown", function (e) {
+      var j = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : -1;
+      if (j < 0) return;
+      e.preventDefault();
+      var n = tabEls[(j + tabEls.length) % tabEls.length];
+      selectTab(n); n.focus();
+    });
   });
 
   loadSample();
